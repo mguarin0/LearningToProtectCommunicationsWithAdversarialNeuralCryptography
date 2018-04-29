@@ -7,17 +7,17 @@ class CryptoNN(torch.nn.Module):
         self.fc_layer = torch.nn.Linear(D_in, H)
         self.conv1 = torch.nn.Conv1d(in_channels=1,
                                      out_channels=3,
-                                     kernel_size=4,
+                                     kernel_size=1,
                                      #kernel_size=(4, 1, 2),
                                      stride=1)
         self.conv2 = torch.nn.Conv1d(in_channels=3,
                                      out_channels=4,
-                                     kernel_size=2,
+                                     kernel_size=1,
                                      #kernel_size=(2, 2, 4),
-                                     stride=2)
+                                     stride=1)
         self.conv3 = torch.nn.Conv1d(in_channels=4,
                                      out_channels=4,
-                                     kernel_size=4,
+                                     kernel_size=1,
                                      #kernel_size=(1, 4, 4),
                                      stride=1)
         self.conv4 = torch.nn.Conv1d(in_channels=4,
@@ -33,19 +33,23 @@ class CryptoNN(torch.nn.Module):
         print("x: {}".format(x.shape))
 
         x = x[None, :, :].transpose(0, 1)
-        print("x: {}".format(x.shape))
-        
+        #print("x: {}".format(x.shape))
+
         x = F.sigmoid(self.fc_layer(x))
-        print("x: {}".format(x.shape))
-        
+        #print("x fc_layer: {}".format(x.shape))
+
         x = self.conv1(x)
-        print("x: {}".format(x.shape))
+        #print("x conv1: {}".format(x.shape))
+
         x = F.sigmoid(self.conv2(x))
-        print("x: {}".format(x.shape))
+        #print("x conv2: {}".format(x.shape))
+
         x = F.sigmoid(self.conv3(x))
-        print("x: {}".format(x.shape))
+        #print("x conv3: {}".format(x.shape))
+
         x = F.tanh(self.conv4(x))
-        print("x: {}".format(x.shape))
-        return x
+        #print("x conv4: {}".format(x.shape))
+
+        return torch.squeeze(x)
     # end
 # end
