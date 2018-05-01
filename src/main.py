@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.autograd import Variable
-import logging
 import argparse
 import os
 import numpy as np
+import time
+
 
 from models import MixTransformNN
 from utils import generate_data, prjPaths, UTF_8_to_binary, binary_to_UTF_8
@@ -24,14 +25,10 @@ def get_args():
                          type=int,
                          default=16,
                          help="length of plaintext (message length)")
-    parser.add_argument("--epochs",
+    parser.add_argument("--training_steps",
                         type=int,
-                        default=10,
-                        help="number of training epochs")
-    parser.add_argument("--num_batches_per_epoch",
-                        type=int,
-                        default=1000,
-                        help="number of minibatches processed per epoch")
+                        default=150000,
+                        help="number of training steps")
     parser.add_argument("--batch_size",
                         type=int,
                         default=4096,
@@ -40,13 +37,13 @@ def get_args():
                         type=float,
                         default=0.0008,
                         help="learning rate")
-    parser.add_argument("--show_every_s_steps",
+    parser.add_argument("--show_every_n_steps",
                         type=int,
                         default=100,
-                        help="during training print output to cli every s steps")
-    parser.add_argument("--checkpoint_every_n_epochs",
+                        help="during training print output to cli every n steps")
+    parser.add_argument("--checkpoint_every_n_steps",
                         type=int,
-                        default=5,
+                        default=5000,
                         help="checkpoint model files during training every n epochs")
     parser.add_argument("--verbose",
                         type=bool,
@@ -57,36 +54,15 @@ def get_args():
     return args
 # end
 
-"""
-def get_logger(log_dir):
-
-    if not os.path.exists(log_dir):
-        os.mkdir(log_dir)
-    if not os.path.exists(os.path.join(log_dir, "train")):
-        os.mkdir(os.path.join(log_dir, "train"))
-
-    current_Time = str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
-    fileHandler = logging.FileHandler(os.path.join(log_dir, "train", "train_xception_%s.log"%current_Time))
-    fileHandler.setFormatter(formatter)
-
-    logger.addHandler(fileHandler)
-
-    return logger
-# end
-"""
 
 def train(gpu_available,
           prjPaths,
           n,
-          epochs,
-          num_batches_per_epoch,
+          training_steps,
           batch_size,
           learning_rate,
-          show_every_s_steps,
-          checkpoint_every_n_epochs,
+          show_every_n_steps,
+          checkpoint_every_n_steps,
           verbose):
 
     # define networks
@@ -105,6 +81,7 @@ def train(gpu_available,
         eve.cuda()
 
     # aggregate training errors
+    alice_bob_training_loss = []
     bob_reconstruction_training_errors = []
     eve_reconstruction_training_errors = []
 
@@ -117,68 +94,76 @@ def train(gpu_available,
     eve_reconstruction_error = nn.L1Loss()
 
     # training loop
-    for epoch in range(epochs):
-        bob_min_error_per_epoch = 1.0
-        eve_min_error_per_epoch = 1.0
+    for step in range(training_steps):
 
-        for network, num_steps in {"alice_bob": num_batches_per_epoch,
-                                   "eve": num_batches_per_epoch*2}.items():
+        # start time for step
+        tic = time.time()
 
-            for step in range(num_steps):
+        # Training alternates between Alice/Bob and Eve
+        for network, num_minibatches in {"alice_bob": 1, "eve": 2}.items():
+
+            """ 
+            Alice/Bob training for one minibatch, and then Eve training for two minibatches this ratio 
+            in order to give a slight computational edge to the adversary Eve without training it so much
+            that it becomes excessively specific to the exact current parameters of Alice and Bob
+            """
+            for minibatch in range(num_minibatches):
 
                 p, k = generate_data(gpu_available=gpu_available, batch_size=batch_size, n=n)
 
+                # forward pass through alice and eve networks
                 alice_c = alice.forward(torch.cat((p, k), 1).float())
                 eve_p = eve.forward(alice_c)
 
                 if network == "alice_bob":
+
+                    # forward pass through bob network
                     bob_p = bob.forward(torch.cat((alice_c, k), 1).float())
 
-                if network == "alice_bob":
+                    # calculate errors
                     error_bob = bob_reconstruction_error(input=bob_p, target=p)
                     error_eve = eve_reconstruction_error(input=eve_p, target=p)
-                    bob_loss =  error_bob + (((n/2) - error_eve**2)/(n/2)**2)
+                    alice_bob_loss =  error_bob + (((n/2) - error_eve**2)/(n/2)**2)
+
+                    # optimize
                     optimizer_alice_bob.zero_grad()
-                    bob_loss.backward()
+                    alice_bob_loss.backward()
                     optimizer_alice_bob.step()
-                    loss = bob_loss
-                    bob_min_error_per_epoch = min(bob_min_error_per_epoch, error_bob)
-                elif network == "eve" and epoch < 1:
+
+                    # end time time for step
+                    time_elapsed = time.time() - tic
+
+                elif network == "eve":
+
+                    # calculate error
                     error_eve = eve_reconstruction_error(input=eve_p, target=p)
+
+                    # optimize
                     optimizer_eve.zero_grad()
                     error_eve.backward()
                     optimizer_eve.step()
-                    loss = error_eve
-                    eve_min_error_per_epoch = min(eve_min_error_per_epoch, error_eve)
 
-                if step % show_every_s_steps == 0:
-                    print("Epoch_{}:{} || Training:{} || Step:{} of {} || {}_Loss:{}".format(network,
-                                                                                             epoch,
-                                                                                             network,
-                                                                                             step,
-                                                                                             num_steps,
-                                                                                             network,
-                                                                                             loss))
-
-                if step == num_batches_per_epoch-1 and verbose:
-                    print("p[0]: {} \n".format(p[0]))
-                    print("alice_c[0]: {} \n".format(alice_c[0]))
-                    if network == "alice_bob":
-                        print("bob_p[0]: {} \n".format(bob_p[0]))
-                    elif network == "eve":
-                        print("eve_p[0]: {} \n".format(eve_p[0]))
-                    print("\n")
+        # end time time for step
+        time_elapsed = time.time() - tic
 
         # aggregate min training errors for bob and eve networks
-        bob_reconstruction_training_errors.append(bob_min_error_per_epoch)
-        eve_reconstruction_training_errors.append(eve_min_error_per_epoch)
+        alice_bob_training_loss.append(alice_bob_loss)
+        bob_reconstruction_training_errors.append(error_bob)
+        eve_reconstruction_training_errors.append(error_eve)
 
-        if epoch % checkpoint_every_n_epochs == 0:
-            print("checkpointing models...")
+        if step % show_every_n_steps == 0:
+            print("Total_Steps: %i of %i || Time_Elapsed_Per_Step: (%.3f sec/step) || Bob_Alice_Loss: %.5f || Bob_Reconstruction_Error: %.5f || Eve_Reconstruction_Error: %.5f" % (step,
+                                                                                                                                                                                   training_steps,
+                                                                                                                                                                                   time_elapsed,
+                                                                                                                                                                                   alice_bob_training_loss[-1],
+                                                                                                                                                                                   bob_reconstruction_training_errors[-1],
+                                                                                                                                                                                   eve_reconstruction_training_errors[-1]))
+
+        if step % checkpoint_every_n_steps == 0 and step != 0:
+            print("checkpointing models...\n")
             torch.save(alice.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "alice.pth"))
             torch.save(bob.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "bob.pth"))
             torch.save(eve.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "eve.pth"))
-
 # end
 
 
@@ -265,12 +250,11 @@ def main():
         train(gpu_available=gpu_available,
               prjPaths=prjPaths_,
               n=args.n,
-              epochs=args.epochs,
-              num_batches_per_epoch=args.num_batches_per_epoch,
+              training_steps=args.training_steps,
               batch_size=args.batch_size,
               learning_rate=args.learning_rate,
-              show_every_s_steps=args.show_every_s_steps,
-              checkpoint_every_n_epochs=args.checkpoint_every_n_epochs,
+              show_every_n_steps=args.show_every_n_steps,
+              checkpoint_every_n_steps=args.checkpoint_every_n_steps,
               verbose=args.verbose)
     elif args.run_type == "inference":
         inference(gpu_available, prjPaths=prjPaths_, n=16) # TODO get n from trained model file for inference

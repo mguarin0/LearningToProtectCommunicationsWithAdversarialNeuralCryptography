@@ -1,6 +1,9 @@
 import torch
 import os
 import codecs
+import datetime
+import logging
+
 
 """
 @author: Michael Guarino
@@ -51,4 +54,23 @@ def binary_to_UTF_8(p_bs):
     # hex -> utf-8
     decoded = "".join([codecs.decode(p_hex.strip(), "hex").decode("utf-8") for p_hex in p_hexs])
     return decoded
+# end
+
+def get_logger(log_dir, run_type):
+
+    if not os.path.exists(log_dir):
+        os.mkdir(log_dir)
+    if not os.path.exists(os.path.join(log_dir, run_type)):
+        os.mkdir(os.path.join(log_dir, run_type))
+
+    current_Time = str(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
+    fileHandler = logging.FileHandler(os.path.join(log_dir, run_type, "%s_%s.log"%(run_type,current_Time)))
+    fileHandler.setFormatter(formatter)
+
+    logger.addHandler(fileHandler)
+
+    return logger
 # end
