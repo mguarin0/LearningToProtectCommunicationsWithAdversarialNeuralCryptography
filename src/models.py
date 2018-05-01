@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-class CryptoNN(torch.nn.Module):
+class MixTransformNN(torch.nn.Module):
     def __init__(self, D_in, H):
 
         super(CryptoNN, self).__init__()

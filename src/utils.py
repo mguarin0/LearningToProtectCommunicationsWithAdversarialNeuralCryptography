@@ -49,6 +49,6 @@ def binary_to_UTF_8(p_bs):
     p_hexs = [hex(p_ord)[2:] for p_ord in p_ords]
 
     # hex -> utf-8
-    decoded = "".join([codecs.decode(p_hex, "hex").decode("utf-8") for p_hex in p_hexs])
+    decoded = "".join([codecs.decode(p_hex.strip(), "hex").decode("utf-8") for p_hex in p_hexs])
     return decoded
 # end

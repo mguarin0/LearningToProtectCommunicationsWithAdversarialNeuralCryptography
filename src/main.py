@@ -7,7 +7,7 @@ import argparse
 import os
 import numpy as np
 
-from models import CryptoNN
+from models import MixTransformNN
 from utils import generate_data, prjPaths, UTF_8_to_binary, binary_to_UTF_8
 
 """
@@ -20,22 +20,38 @@ def get_args():
                          default="train",
                          choices=["train", "inference"],
                          help="train model or load trained model for interence")
-    parser.add_argument('--msg_length',
+    parser.add_argument('--n',
                          type=int,
                          default=16,
                          help="length of plaintext (message length)")
-    parser.add_argument('--learning_rate',
-                        type=float,
-                        default=0.0008,
-                        help="learning rate")
     parser.add_argument('--epochs',
                         type=int,
                         default=10,
                         help="number of training epochs")
-    parser.add_argument('--minibatch_size',
+    parser.add_argument('--num_batches_per_epoch',
+                        type=int,
+                        default=1000,
+                        help="number of minibatches processed per epoch")
+    parser.add_argument('--batch_size',
                         type=int,
                         default=4096,
-                        help="number training examples per minibatch")
+                        help="number training examples per (mini)batch")
+    parser.add_argument('--learning_rate',
+                        type=float,
+                        default=0.0008,
+                        help="learning rate")
+    parser.add_argument('--show_every_s_steps',
+                        type=int,
+                        default=100,
+                        help="during training print output to cli every s steps")
+    parser.add_argument('--checkpoint_every_n_epochs',
+                        type=int,
+                        default=5,
+                        help="checkpoint model files during training every n epochs")
+    parser.add_argument('--verbose',
+                        type=bool,
+                        default=False,
+                        help="during training print model outputs to cli")
     args = parser.parse_args()
 
     return args
@@ -64,19 +80,19 @@ def get_logger(log_dir):
 
 def train(gpu_available,
           prjPaths,
-          n=16,
-          epochs=200,
-          num_batches_per_epoch=1000,
-          batch_size=512,
-          learning_rate=0.0008,
-          show_every_n_steps=500,
-          checkpoint_every_n_epochs=5,
-          verbose=False):
+          n,
+          epochs,
+          num_batches_per_epoch,
+          batch_size,
+          learning_rate,
+          show_every_n_steps,
+          checkpoint_every_n_epochs,
+          verbose):
 
     # define networks
-    alice = CryptoNN(D_in=(n*2), H=(n*2))
-    bob = CryptoNN(D_in=(n*2), H=(n*2))
-    eve = CryptoNN(D_in=n, H=(n*2))
+    alice = MixTransformNN(D_in=(n*2), H=(n*2))
+    bob = MixTransformNN(D_in=(n*2), H=(n*2))
+    eve = MixTransformNN(D_in=n, H=(n*2))
 
     # specify that model is currently in training mode
     alice.train()
@@ -127,11 +143,11 @@ def train(gpu_available,
                     optimizer_alice_bob.step()
                     loss = bob_loss
                     bob_min_error_per_epoch = min(bob_min_error_per_epoch, error_bob)
-                elif network == "eve":
+                elif network == "eve" and epoch < 1:
                     error_eve = eve_reconstruction_error(input=eve_p, target=p)
                     optimizer_eve.zero_grad()
-                    error_eve.backward()
-                    optimizer_eve.step()
+                    #error_eve.backward()
+                    #optimizer_eve.step()
                     loss = error_eve
                     eve_min_error_per_epoch = min(eve_min_error_per_epoch, error_eve)
 
@@ -158,6 +174,7 @@ def train(gpu_available,
         eve_reconstruction_training_errors.append(eve_min_error_per_epoch)
 
         if epoch % checkpoint_every_n_epochs == 0:
+            print("checkpointing models...")
             torch.save(alice.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "alice.pth"))
             torch.save(bob.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "bob.pth"))
             torch.save(eve.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "eve.pth"))
@@ -171,9 +188,9 @@ def inference(gpu_available, prjPaths, n):
     NUM_BITS_PER_BYTE = 8
 
     # define networks
-    alice = CryptoNN(D_in=(n*2), H=(n*2))
-    bob = CryptoNN(D_in=(n*2), H=(n*2))
-    eve = CryptoNN(D_in=n, H=(n*2))
+    alice = MixTransformNN(D_in=(n*2), H=(n*2))
+    bob = MixTransformNN(D_in=(n*2), H=(n*2))
+    eve = MixTransformNN(D_in=n, H=(n*2))
 
     # restoring persisted networks
     print("restoring Alice, Bob, and Eve networks...\n")
@@ -226,7 +243,8 @@ def inference(gpu_available, prjPaths, n):
 
             eve_ps_b.append("".join(list(map(str, eve_p))))
             bob_ps_b.append("".join(list(map(str, bob_p))))
-            
+
+        # TODO if model isn't well trained then it will predict binary values that are not valid in UTF-8 find another way to demo
         eve_p_utf_8 = binary_to_UTF_8(eve_ps_b)
         bob_p_utf_8 = binary_to_UTF_8(bob_ps_b)
 
@@ -245,9 +263,17 @@ def main():
 
     if args.run_type == "train":
         train(gpu_available=gpu_available,
-              prjPaths=prjPaths_)
+              prjPaths=prjPaths_,
+              n=args.n,
+              epochs=args.epochs,
+              num_batches_per_epoch=args.num_batches_per_epoch,
+              batch_size=args.batch_size,
+              learning_rate=args.learning_rate,
+              show_every_n_steps=args.show_every_n_steps,
+              checkpoint_every_n_epochs=args.checkpoint_every_n_epochs,
+              verbose=args.verbose)
     elif args.run_type == "inference":
-        inference(gpu_available, prjPaths=prjPaths_, n=16)
+        inference(gpu_available, prjPaths=prjPaths_, n=16) # TODO get n from trained model file for inference
 # end
 
 if __name__ == "__main__":
