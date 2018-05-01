@@ -34,10 +34,9 @@ def generate_data(gpu_available, batch_size, n):
 
 
 def UTF_8_to_binary(p_utf_8):
-    # TODO if binary has leading 0 then it will be omitted...this must be fixed
 
     # utf-8 -> binary
-    p_bs = " ".join(format(ord(x), 'b') for x in p_utf_8).split(" ")
+    p_bs = " ".join(format(ord(x), '08b') for x in p_utf_8).split(" ")
     return p_bs
 # end
 
