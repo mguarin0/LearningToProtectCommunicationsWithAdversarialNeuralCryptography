@@ -15,40 +15,40 @@ TODO: network weight initialization
 """
 def get_args():
     parser = argparse.ArgumentParser(description="PyTorch Implementation of cryptogan")
-    parser.add_argument('--run_type',
+    parser.add_argument("--run_type",
                          type=str,
                          default="train",
                          choices=["train", "inference"],
                          help="train model or load trained model for interence")
-    parser.add_argument('--n',
+    parser.add_argument("--n",
                          type=int,
                          default=16,
                          help="length of plaintext (message length)")
-    parser.add_argument('--epochs',
+    parser.add_argument("--epochs",
                         type=int,
                         default=10,
                         help="number of training epochs")
-    parser.add_argument('--num_batches_per_epoch',
+    parser.add_argument("--num_batches_per_epoch",
                         type=int,
                         default=1000,
                         help="number of minibatches processed per epoch")
-    parser.add_argument('--batch_size',
+    parser.add_argument("--batch_size",
                         type=int,
                         default=4096,
                         help="number training examples per (mini)batch")
-    parser.add_argument('--learning_rate',
+    parser.add_argument("--learning_rate",
                         type=float,
                         default=0.0008,
                         help="learning rate")
-    parser.add_argument('--show_every_s_steps',
+    parser.add_argument("--show_every_s_steps",
                         type=int,
                         default=100,
                         help="during training print output to cli every s steps")
-    parser.add_argument('--checkpoint_every_n_epochs',
+    parser.add_argument("--checkpoint_every_n_epochs",
                         type=int,
                         default=5,
                         help="checkpoint model files during training every n epochs")
-    parser.add_argument('--verbose',
+    parser.add_argument("--verbose",
                         type=bool,
                         default=False,
                         help="during training print model outputs to cli")
@@ -85,7 +85,7 @@ def train(gpu_available,
           num_batches_per_epoch,
           batch_size,
           learning_rate,
-          show_every_n_steps,
+          show_every_s_steps,
           checkpoint_every_n_epochs,
           verbose):
 
@@ -146,12 +146,12 @@ def train(gpu_available,
                 elif network == "eve" and epoch < 1:
                     error_eve = eve_reconstruction_error(input=eve_p, target=p)
                     optimizer_eve.zero_grad()
-                    #error_eve.backward()
-                    #optimizer_eve.step()
+                    error_eve.backward()
+                    optimizer_eve.step()
                     loss = error_eve
                     eve_min_error_per_epoch = min(eve_min_error_per_epoch, error_eve)
 
-                if step % show_every_n_steps == 0:
+                if step % show_every_s_steps == 0:
                     print("Epoch_{}:{} || Training:{} || Step:{} of {} || {}_Loss:{}".format(network,
                                                                                              epoch,
                                                                                              network,
@@ -269,7 +269,7 @@ def main():
               num_batches_per_epoch=args.num_batches_per_epoch,
               batch_size=args.batch_size,
               learning_rate=args.learning_rate,
-              show_every_n_steps=args.show_every_n_steps,
+              show_every_s_steps=args.show_every_s_steps,
               checkpoint_every_n_epochs=args.checkpoint_every_n_epochs,
               verbose=args.verbose)
     elif args.run_type == "inference":

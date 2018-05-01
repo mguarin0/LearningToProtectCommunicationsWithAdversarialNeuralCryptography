@@ -3,7 +3,7 @@ import torch.nn.functional as F
 class MixTransformNN(torch.nn.Module):
     def __init__(self, D_in, H):
 
-        super(CryptoNN, self).__init__()
+        super(MixTransformNN, self).__init__()
         self.fc_layer = torch.nn.Linear(D_in, H)
         self.conv1 = torch.nn.Conv1d(in_channels=1,
                                      out_channels=2,
