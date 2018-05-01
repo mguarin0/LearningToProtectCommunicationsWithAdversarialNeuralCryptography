@@ -226,6 +226,12 @@ def inference(gpu_available, prjPaths, n):
 
             eve_ps_b.append("".join(list(map(str, eve_p))))
             bob_ps_b.append("".join(list(map(str, bob_p))))
+            
+        eve_p_utf_8 = binary_to_UTF_8(eve_ps_b)
+        bob_p_utf_8 = binary_to_UTF_8(bob_ps_b)
+
+        print("eve_p_utf_8: {}".format(eve_p_utf_8))
+        print("bob_p_utf_8: {}\n".format(bob_p_utf_8))
 # end
 
 def main():

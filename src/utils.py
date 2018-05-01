@@ -44,13 +44,11 @@ def binary_to_UTF_8(p_bs):
 
     # binary string -> ord
     p_ords = [int(p_b, 2) for p_b in p_bs]
-    #print("p_ords: {}".format(p_ords))
 
     # ord -> hex "0x68"[2:] must slice to be valid hex
     p_hexs = [hex(p_ord)[2:] for p_ord in p_ords]
-    #print("p_hexs: {}".format(p_hexs))
 
     # hex -> utf-8
-    decoded = [codecs.decode(p_hex, "hex").decode("utf-8") for p_hex in p_hexs]
+    decoded = "".join([codecs.decode(p_hex, "hex").decode("utf-8") for p_hex in p_hexs])
     return decoded
 # end
