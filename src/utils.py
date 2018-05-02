@@ -3,6 +3,7 @@ import os
 import codecs
 import datetime
 import logging
+import pickle
 
 
 """
@@ -37,11 +38,10 @@ def generate_data(gpu_available, batch_size, n):
                 torch.randint(0, 2, (batch_size, n), dtype=torch.float)*2-1]
 # end
 
-
 def UTF_8_to_binary(p_utf_8):
 
     # utf-8 -> binary
-    p_bs = " ".join(format(ord(x), '08b') for x in p_utf_8).split(" ")
+    p_bs = " ".join(format(ord(x), "08b") for x in p_utf_8).split(" ")
     return p_bs
 # end
 
@@ -75,4 +75,15 @@ def get_logger(log_dir, run_type):
     logger.addHandler(fileHandler)
 
     return logger
+# end
+
+def persist_object(full_path, x):
+    with open(full_path, "wb") as file:
+        pickle.dump(x, file)
+# end
+
+def restore_persist_object(full_path):
+    with open(full_path, "rb") as file:
+        x = pickle.load(file)
+    return x
 # end
