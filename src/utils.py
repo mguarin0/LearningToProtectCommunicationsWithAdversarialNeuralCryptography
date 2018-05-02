@@ -16,12 +16,14 @@ class prjPaths:
         self.ROOT_MOD_DIR = "/".join(self.SRC_DIR.split("/")[:-1])
         self.LIB_DIR = os.path.join(self.ROOT_MOD_DIR, "lib")
         self.CHECKPOINT_DIR = os.path.join(self.LIB_DIR, "chkpts")
+        self.PERSIST_DIR = os.path.join(self.LIB_DIR, "persist")
         self.LOGS_DIR = os.path.join(self.LIB_DIR, "logs")
 
         pth_exists_else_mk = lambda path: os.mkdir(path) if not os.path.exists(path) else None
 
         pth_exists_else_mk(self.LIB_DIR)
         pth_exists_else_mk(self.CHECKPOINT_DIR)
+        pth_exists_else_mk(self.PERSIST_DIR)
         pth_exists_else_mk(self.LOGS_DIR)
     # end
 # end

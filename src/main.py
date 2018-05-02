@@ -6,6 +6,7 @@ import argparse
 import os
 import numpy as np
 import time
+import pickle
 
 
 from models import MixTransformNN
@@ -27,11 +28,11 @@ def get_args():
                          help="length of plaintext (message length)")
     parser.add_argument("--training_steps",
                         type=int,
-                        default=150000,
+                        default=25000,
                         help="number of training steps")
     parser.add_argument("--batch_size",
                         type=int,
-                        default=4096,
+                        default=256,
                         help="number training examples per (mini)batch")
     parser.add_argument("--learning_rate",
                         type=float,
@@ -49,8 +50,12 @@ def get_args():
                         type=bool,
                         default=False,
                         help="during training print model outputs to cli")
-    args = parser.parse_args()
+    parser.add_argument("--clip_value",
+                        type=float,
+                        default=1,
+                        help="maximum allowed value of the gradients in range(-clip_value, clip_value)")
 
+    args = parser.parse_args()
     return args
 # end
 
@@ -63,7 +68,8 @@ def train(gpu_available,
           learning_rate,
           show_every_n_steps,
           checkpoint_every_n_steps,
-          verbose):
+          verbose,
+          clip_value):
 
     # define networks
     alice = MixTransformNN(D_in=(n*2), H=(n*2))
@@ -81,12 +87,15 @@ def train(gpu_available,
         eve.cuda()
 
     # aggregate training errors
-    alice_bob_training_loss = []
-    bob_reconstruction_training_errors = []
-    eve_reconstruction_training_errors = []
+    aggregated_losses = {
+            "alice_bob_training_loss": [],
+            "bob_reconstruction_training_errors": [],
+            "eve_reconstruction_training_errors": []
+    }
 
     # define optimizers
-    optimizer_alice_bob = Adam(params=list(alice.parameters()) + list(bob.parameters()), lr=learning_rate)
+    optimizer_alice = Adam(params=alice.parameters(), lr=learning_rate)
+    optimizer_bob = Adam(params=bob.parameters(), lr=learning_rate)
     optimizer_eve = Adam(params=eve.parameters(), lr=learning_rate)
 
     # define losses 
@@ -125,45 +134,51 @@ def train(gpu_available,
                     error_eve = eve_reconstruction_error(input=eve_p, target=p)
                     alice_bob_loss =  error_bob + (((n/2) - error_eve**2)/(n/2)**2)
 
-                    # optimize
-                    optimizer_alice_bob.zero_grad()
+                    # Zero gradients, perform a backward pass, clip gradients, and update the weights.
+                    optimizer_alice.zero_grad()
+                    optimizer_bob.zero_grad()
                     alice_bob_loss.backward()
-                    optimizer_alice_bob.step()
-
-                    # end time time for step
-                    time_elapsed = time.time() - tic
+                    nn.utils.clip_grad_value_(alice.parameters(), clip_value)
+                    nn.utils.clip_grad_value_(bob.parameters(), clip_value)
+                    optimizer_alice.step()
+                    optimizer_bob.step()
 
                 elif network == "eve":
 
                     # calculate error
                     error_eve = eve_reconstruction_error(input=eve_p, target=p)
 
-                    # optimize
+                    # Zero gradients, perform a backward pass, and update the weights
                     optimizer_eve.zero_grad()
                     error_eve.backward()
+                    nn.utils.clip_grad_value_(eve.parameters(), clip_value)
                     optimizer_eve.step()
 
         # end time time for step
         time_elapsed = time.time() - tic
 
         # aggregate min training errors for bob and eve networks
-        alice_bob_training_loss.append(alice_bob_loss)
-        bob_reconstruction_training_errors.append(error_bob)
-        eve_reconstruction_training_errors.append(error_eve)
+        aggregated_losses["alice_bob_training_loss"].append(alice_bob_loss)
+        aggregated_losses["bob_reconstruction_training_errors"].append(error_bob)
+        aggregated_losses["eve_reconstruction_training_errors"].append(error_eve)
 
         if step % show_every_n_steps == 0:
             print("Total_Steps: %i of %i || Time_Elapsed_Per_Step: (%.3f sec/step) || Bob_Alice_Loss: %.5f || Bob_Reconstruction_Error: %.5f || Eve_Reconstruction_Error: %.5f" % (step,
                                                                                                                                                                                    training_steps,
                                                                                                                                                                                    time_elapsed,
-                                                                                                                                                                                   alice_bob_training_loss[-1],
-                                                                                                                                                                                   bob_reconstruction_training_errors[-1],
-                                                                                                                                                                                   eve_reconstruction_training_errors[-1]))
+                                                                                                                                                                                   aggregated_losses["alice_bob_training_loss"][-1],
+                                                                                                                                                                                   aggregated_losses["bob_reconstruction_training_errors"][-1],
+                                                                                                                                                                                   aggregated_losses["eve_reconstruction_training_errors"][-1]))
 
         if step % checkpoint_every_n_steps == 0 and step != 0:
             print("checkpointing models...\n")
             torch.save(alice.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "alice.pth"))
             torch.save(bob.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "bob.pth"))
             torch.save(eve.state_dict(), os.path.join(prjPaths.CHECKPOINT_DIR, "eve.pth"))
+
+    # pickle aggregated list of errors
+    with open(os.path.join(prjPaths.PERSIST_DIR, "aggregated_losses.p"), "wb") as file:
+        pickle.dump(aggregated_losses, file)
 # end
 
 
@@ -255,7 +270,8 @@ def main():
               learning_rate=args.learning_rate,
               show_every_n_steps=args.show_every_n_steps,
               checkpoint_every_n_steps=args.checkpoint_every_n_steps,
-              verbose=args.verbose)
+              verbose=args.verbose,
+              clip_value=args.clip_value)
     elif args.run_type == "inference":
         inference(gpu_available, prjPaths=prjPaths_, n=16) # TODO get n from trained model file for inference
 # end
