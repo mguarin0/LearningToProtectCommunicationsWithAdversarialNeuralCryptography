@@ -34,11 +34,12 @@ To review the networks objective in a more formal sense:
 * PyTorch 0.4.0
 
 ## How to run
-`python3 src/main.py -h` get a list of all command line arguments
+all commands below are assuming that current working directory is `LearningToProtectCommunicationsWithAdversarialNeuralCryptography/src`
+`python3 main.py -h` get a list of all command line arguments
 
-`python3 src/main.py` train model with default command line arguments
+`python3 main.py` train model with default command line arguments
 
-`python3 src/main.py --run_type inference` run model inference
+`python3 main.py --run_type inference` run model inference
 
 ## Network Details
 The network architecture introduced by Adbadi, et al. [[1]](https://arxiv.org/pdf/1610.06918.pdf) is known as the Mix and Transform Architecture. All binary encoded plaintext bits are mapped to [-1,1]. Alice and Bob consists of 1 x Fully Connected Layer 2N x 2N where N is the length in bits of the message. The fully connected layer is then followed by 4 x 1D Convolutional Layers with filter sizes [4, 2, 1, 1], input channels [1, 2, 1, 1], output channels[2, 4, 4, 1]. The strides for the 1D convolution by layer are [1, 2, 1, 1]. Note that same convolution is used to all convolutional layers in order to keep input and output diminsions the same. The activation functions used at each layer are the Sigmoid for all layers except final layer which is a Tanh used to bring values back to a range [-1, 1] that can map to binary values. The Eve uses more or less the same architecture except the Fully Connected Layer dimensions are N x 2N where N is the length in bits of the message because only receiving _C_. It should be noted that _P_, _K_ are vectors of same size; however, there is no reason that _K_ has to be the same size as _P_. _P_ and _K_ are generated from uniform distribution and values are mapped from [0,1] to [-1,1] All Network parameters randomly initialized.
