@@ -1,3 +1,7 @@
+"""
+@author: Michael Guarino
+"""
+
 import torch
 import torch.nn.functional as F
 
