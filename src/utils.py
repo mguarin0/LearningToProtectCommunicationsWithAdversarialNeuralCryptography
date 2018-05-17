@@ -1,15 +1,13 @@
+"""
+@author: Michael Guarino
+"""
+
 import torch
 import os
 import codecs
 import datetime
 import logging
 import pickle
-
-
-"""
-@author: Michael Guarino
-"""
-
 
 class prjPaths:
     def __init__(self, getDataset=True):
